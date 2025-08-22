@@ -23,7 +23,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
   const telegramWidgetRef = useRef<HTMLDivElement>(null);
 
   // Для демонстрації використовуємо тестовий бот. В продакшені потрібен ваш власний бот
-  const BOT_USERNAME = '@opl2025_bot'; // Замініть на ваш бот username
+  const BOT_USERNAME = 'your_test_bot'; // Замініть на ваш бот username
 
   // Обробка callback від Telegram Widget
   useEffect(() => {
