@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -7,10 +7,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Send, Shield, CheckCircle2 } from 'lucide-react';
-import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 
 interface LoginModalProps {
@@ -20,71 +17,87 @@ interface LoginModalProps {
 }
 
 const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => {
-  const [step, setStep] = useState<'telegram' | 'code' | 'success'>('telegram');
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [verificationCode, setVerificationCode] = useState('');
+  const [step, setStep] = useState<'widget' | 'success'>('widget');
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
+  const telegramWidgetRef = useRef<HTMLDivElement>(null);
 
-  const handleTelegramLogin = async () => {
-    if (!phoneNumber) {
-      toast({
-        title: "Помилка",
-        description: "Будь ласка, введіть номер телефону",
-        variant: "destructive"
-      });
-      return;
-    }
+  // Для демонстрації використовуємо тестовий бот. В продакшені потрібен ваш власний бот
+  const BOT_USERNAME = 'your_test_bot'; // Замініть на ваш бот username
 
-    setLoading(true);
-    
-    // Simulate API call to Telegram
-    setTimeout(() => {
-      setLoading(false);
-      setStep('code');
-      toast({
-        title: "Код надіслано!",
-        description: "Перевірте Telegram для отримання коду підтвердження"
-      });
-    }, 2000);
-  };
-
-  const handleCodeVerification = async () => {
-    if (!verificationCode) {
-      toast({
-        title: "Помилка",
-        description: "Будь ласка, введіть код підтвердження",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    setLoading(true);
-    
-    // Simulate API verification
-    setTimeout(() => {
+  // Обробка callback від Telegram Widget
+  useEffect(() => {
+    // Створюємо глобальний callback для Telegram Widget
+    (window as any).telegramLoginCallback = (user: any) => {
       setLoading(false);
       setStep('success');
       
       setTimeout(() => {
-        const mockUser = {
-          id: '123456789',
-          firstName: 'John',
-          lastName: 'Doe',
-          username: 'johndoe',
-          phone: phoneNumber,
-          avatar: null
-        };
-        
-        onLogin(mockUser);
+        onLogin({
+          id: user.id.toString(),
+          firstName: user.first_name,
+          lastName: user.last_name || '',
+          username: user.username || '',
+          photoUrl: user.photo_url || null,
+          authDate: user.auth_date,
+          hash: user.hash
+        });
       }, 1500);
-    }, 2000);
+    };
+
+    return () => {
+      // Очищуємо callback при відмонтуванні
+      delete (window as any).telegramLoginCallback;
+    };
+  }, [onLogin]);
+
+  // Створюємо Telegram Widget при відкритті модалки
+  useEffect(() => {
+    if (isOpen && step === 'widget' && telegramWidgetRef.current && (window as any).TelegramLoginWidget) {
+      // Очищуємо попередній віджет
+      telegramWidgetRef.current.innerHTML = '';
+      
+      // Створюємо новий віджет
+      const script = document.createElement('script');
+      script.async = true;
+      script.src = 'https://telegram.org/js/telegram-widget.js?22';
+      script.setAttribute('data-telegram-login', BOT_USERNAME);
+      script.setAttribute('data-size', 'large');
+      script.setAttribute('data-onauth', 'telegramLoginCallback(user)');
+      script.setAttribute('data-request-access', 'write');
+      
+      telegramWidgetRef.current.appendChild(script);
+      
+      // Показуємо повідомлення про налаштування бота
+      toast({
+        title: "Увага!",
+        description: "Для роботи потрібен бот від @BotFather. Створіть бота та вкажіть його username в коді.",
+        duration: 5000
+      });
+    }
+  }, [isOpen, step, toast]);
+
+  const handleDemoLogin = () => {
+    setLoading(true);
+    setStep('success');
+    
+    setTimeout(() => {
+      const demoUser = {
+        id: '123456789',
+        firstName: 'Demo',
+        lastName: 'User',
+        username: 'demo_user',
+        photoUrl: null,
+        authDate: Math.floor(Date.now() / 1000),
+        hash: 'demo_hash'
+      };
+      
+      onLogin(demoUser);
+    }, 1500);
   };
 
   const resetModal = () => {
-    setStep('telegram');
-    setPhoneNumber('');
-    setVerificationCode('');
+    setStep('widget');
     setLoading(false);
   };
 
@@ -101,83 +114,42 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
             <Send className="w-6 h-6 text-white" />
           </div>
           <DialogTitle className="text-2xl">
-            {step === 'telegram' && "Вхід через Telegram"}
-            {step === 'code' && "Підтвердження"}
+            {step === 'widget' && "Вхід через Telegram"}
             {step === 'success' && "Успішно!"}
           </DialogTitle>
           <DialogDescription>
-            {step === 'telegram' && "Введіть ваш номер телефону для входу через Telegram"}
-            {step === 'code' && "Введіть код, який ви отримали в Telegram"}
+            {step === 'widget' && "Натисніть кнопку нижче для входу через ваш акаунт Telegram"}
             {step === 'success' && "Ваш акаунт успішно підключено"}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6 py-4">
-          {step === 'telegram' && (
+          {step === 'widget' && (
             <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="phone">Номер телефону</Label>
-                <Input
-                  id="phone"
-                  type="tel"
-                  placeholder="+380 XX XXX XX XX"
-                  value={phoneNumber}
-                  onChange={(e) => setPhoneNumber(e.target.value)}
-                  className="text-center"
-                />
-              </div>
-              
               <div className="flex items-center space-x-2 text-sm text-muted-foreground bg-accent/50 p-3 rounded-lg">
                 <Shield className="w-4 h-4" />
                 <span>Ваші дані захищені і використовуються тільки для автентифікації</span>
               </div>
 
-              <Button 
-                onClick={handleTelegramLogin}
-                disabled={loading}
-                className="w-full bg-gradient-primary hover:shadow-telegram-glow"
-              >
-                {loading ? "Надсилаємо код..." : "Надіслати код"}
-              </Button>
-            </div>
-          )}
-
-          {step === 'code' && (
-            <div className="space-y-4">
-              <div className="text-center">
-                <Badge variant="secondary" className="mb-4">
-                  Код надіслано на {phoneNumber}
-                </Badge>
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="code">Код підтвердження</Label>
-                <Input
-                  id="code"
-                  type="text"
-                  placeholder="12345"
-                  value={verificationCode}
-                  onChange={(e) => setVerificationCode(e.target.value)}
-                  className="text-center text-2xl tracking-widest"
-                  maxLength={5}
-                />
+              {/* Telegram Login Widget Container */}
+              <div className="flex justify-center py-4">
+                <div ref={telegramWidgetRef} />
               </div>
 
-              <Button 
-                onClick={handleCodeVerification}
-                disabled={loading}
-                className="w-full bg-gradient-primary hover:shadow-telegram-glow"
-              >
-                {loading ? "Підтвердження..." : "Підтвердити"}
-              </Button>
-              
-              <Button 
-                variant="ghost" 
-                onClick={() => setStep('telegram')}
-                className="w-full"
-              >
-                Назад
-              </Button>
+              {/* Demo Login Button для тестування */}
+              <div className="border-t pt-4">
+                <p className="text-sm text-muted-foreground text-center mb-3">
+                  Або скористайтеся демо-входом для тестування:
+                </p>
+                <Button 
+                  onClick={handleDemoLogin}
+                  disabled={loading}
+                  variant="outline"
+                  className="w-full"
+                >
+                  {loading ? "Входимо..." : "Demo Login"}
+                </Button>
+              </div>
             </div>
           )}
 
